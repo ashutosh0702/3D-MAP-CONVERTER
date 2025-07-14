@@ -1,0 +1,26 @@
+# Core Geospatial Libraries
+geopandas
+shapely
+osmnx
+rasterio
+elevation
+
+# Interactive Mapping
+leafmap
+ipyleaflet
+jupyterlab
+
+# 3D Visualization
+pyvista
+numpy
+
+# UI (optional for prototype)
+streamlit
+panel
+
+# Utility
+matplotlib
+requests
+
+# Environment Setup
+notebook
