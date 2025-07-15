@@ -12,11 +12,12 @@ class MapViewer:
         self._setup_draw()
 
     def _setup_draw(self):
-        def handle_draw(self_, action, geo_json):
+        def handle_draw(_, action, geo_json):
             coords = geo_json['geometry']['coordinates'][0]
             lats = [c[1] for c in coords]
             lons = [c[0] for c in coords]
-            self.bbox = (max(lats), min(lats), max(lons), min(lons))
+            self.bbox = (min(lats), max(lats), min(lons), max(lons))
+
 
         self.draw_control.on_draw(handle_draw)
         self.map.add_control(self.draw_control)
