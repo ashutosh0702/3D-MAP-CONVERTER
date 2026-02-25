@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "middleware": {
+    "/": {
+      "files": [
+        "server/edge/chunks/node_modules_23f820b2._.js",
+        "server/edge/chunks/[root-of-the-server]__1ea24ebd._.js",
+        "server/edge/chunks/turbopack-node_modules_next_dist_esm_build_templates_edge-wrapper_68e6dbd1.js"
+      ],
+      "name": "middleware",
+      "page": "/",
+      "matchers": [
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/dashboard(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/dashboard/:path*"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/trip(?:\\/((?:[^\\/#\\?]+?)(?:\\/(?:[^\\/#\\?]+?))*))?(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/trip/:path*"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/login(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/login"
+        },
+        {
+          "regexp": "^(?:\\/(_next\\/data\\/[^/]{1,}))?\\/register(\\\\.json)?[\\/#\\?]?$",
+          "originalSource": "/register"
+        }
+      ],
+      "wasm": [
+        {
+          "name": "wasm_da7cd21b3acf8cb1",
+          "filePath": "server/edge/chunks/node_modules__prisma_client_query_engine_bg_23ace1ce.wasm"
+        }
+      ],
+      "assets": [],
+      "env": {
+        "__NEXT_BUILD_ID": "hvRyxIOjtnMmOV93VS3U1",
+        "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY": "8Y63YAbDZuW1SuTQ7kPXljsicZkC3LbLBOn4/LcIeZ4=",
+        "__NEXT_PREVIEW_MODE_ID": "ced8323be986998764491212651669c7",
+        "__NEXT_PREVIEW_MODE_ENCRYPTION_KEY": "ddc55e9af52fbb70a3bfb3eae86abdfcde82a1613268b8c2a2f107f0a2da1101",
+        "__NEXT_PREVIEW_MODE_SIGNING_KEY": "368dfe3e2157c8d23c38b75c2f02b930eb664965c5b542a712d70239cdd97662"
+      }
+    }
+  },
+  "sortedMiddleware": [
+    "/"
+  ],
+  "functions": {}
+}

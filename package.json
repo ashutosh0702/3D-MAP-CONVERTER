@@ -10,20 +10,19 @@
   },
   "dependencies": {
     "@mapbox/mapbox-gl-draw": "^1.5.1",
-    "@prisma/client": "^7.4.1",
+    "@prisma/client": "^6.19.2",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "mapbox-gl": "^3.19.0",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
-    "prisma": "^7.4.1",
+    "prisma": "^6.19.2",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/mapbox__mapbox-gl-draw": "^1.4.9",
     "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^20",
     "@types/react": "^19",
