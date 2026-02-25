@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: tripdiorama-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tripdiorama
+      POSTGRES_PASSWORD: tripdiorama_dev
+      POSTGRES_DB: tripdiorama
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

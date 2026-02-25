@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth Models ──────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  image         String?
+  trips         Trip[]
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Trip Models ──────────────────────────────────────────
+
+enum TripStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
+enum InputMode {
+  DRAW_ROUTE
+  PIN_LOCATIONS
+}
+
+enum LogType {
+  JOURNAL
+  CHECK_IN
+  GPS_POINT
+}
+
+model Trip {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  description  String?
+  status       TripStatus @default(PLANNING)
+  inputMode    InputMode  @default(PIN_LOCATIONS)
+  startDate    DateTime?
+  endDate      DateTime?
+  // Bounding box for diorama clipping
+  bboxMinLat   Float?
+  bboxMinLng   Float?
+  bboxMaxLat   Float?
+  bboxMaxLng   Float?
+  // Route data
+  routeGeoJSON Json?
+  gpsTrack     Json?
+  // Relations
+  stops        Stop[]
+  logs         TripLog[]
+  photos       Photo[]
+  diorama      Diorama?
+  shareId      String?    @unique @default(cuid())
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([userId])
+}
+
+model Stop {
+  id          String    @id @default(cuid())
+  tripId      String
+  trip        Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  name        String
+  lat         Float
+  lng         Float
+  order       Int
+  arrivalDate DateTime?
+  notes       String?
+  photos      Photo[]
+  logs        TripLog[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tripId])
+}
+
+model TripLog {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  stopId    String?
+  stop      Stop?    @relation(fields: [stopId], references: [id])
+  type      LogType  @default(JOURNAL)
+  content   String
+  lat       Float?
+  lng       Float?
+  timestamp DateTime @default(now())
+
+  @@index([tripId])
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  stopId    String?
+  stop      Stop?    @relation(fields: [stopId], references: [id])
+  url       String
+  caption   String?
+  lat       Float?
+  lng       Float?
+  takenAt   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tripId])
+}
+
+model Diorama {
+  id          String   @id @default(cuid())
+  tripId      String   @unique
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  imageUrl    String?
+  sceneConfig Json?
+  generatedAt DateTime @default(now())
+}
