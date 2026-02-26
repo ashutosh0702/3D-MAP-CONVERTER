@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import "leaflet/dist/leaflet.css";
 
 interface Stop {
     id: string;
@@ -31,12 +32,16 @@ export default function TripPlanPage() {
     const { tripId } = useParams<{ tripId: string }>();
     const router = useRouter();
     const mapContainer = useRef<HTMLDivElement>(null);
-    const map = useRef<mapboxgl.Map | null>(null);
-    const markersRef = useRef<mapboxgl.Marker[]>([]);
+    const map = useRef<any>(null);
+    const markersRef = useRef<any[]>([]);
+    const LRef = useRef<any>(null);
+    const tileLayerRef = useRef<any>(null);
+    const routeLayerRef = useRef<any>(null);
 
     const [trip, setTrip] = useState<Trip | null>(null);
     const [stops, setStops] = useState<Stop[]>([]);
     const [loading, setLoading] = useState(true);
+    const [mapReady, setMapReady] = useState(false);
     const [saving, setSaving] = useState(false);
     const [mapStyle, setMapStyle] = useState<"satellite" | "streets" | "terrain">("streets");
     const [editingStop, setEditingStop] = useState<string | null>(null);
@@ -67,64 +72,109 @@ export default function TripPlanPage() {
         fetchTrip();
     }, [tripId, router]);
 
-    // Map style URLs
+    // Map style URLs (Leaflet/XYZ format)
     const styleUrls: Record<string, string> = {
-        streets: "mapbox://styles/mapbox/dark-v11",
-        satellite: "mapbox://styles/mapbox/satellite-streets-v12",
-        terrain: "mapbox://styles/mapbox/outdoors-v12",
+        streets: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", // CartoDB Dark (matches our theme)
+        satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", // Esri Satellite (free, no key)
+        terrain: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", // OpenTopoMap (free, no key)
     };
 
-    // Initialize map
+    const attributions: Record<string, string> = {
+        streets: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, &copy; <a href="https://carto.com/">CARTO</a>',
+        satellite: "Tiles &copy; Esri",
+        terrain: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    };
+
+    // Initialize Leaflet map
     useEffect(() => {
-        if (!mapContainer.current || map.current) return;
+        if (loading || map.current || !mapContainer.current) return;
 
-        const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-        if (!token || token === "YOUR_MAPBOX_ACCESS_TOKEN_HERE") {
-            console.warn("Mapbox token not set");
-            return;
-        }
+        let isMounted = true;
 
-        mapboxgl.accessToken = token;
+        const initMap = async () => {
+            try {
+                console.log("[Map] Starting Leaflet initialization...");
+                const LModule = await import("leaflet");
+                const L = LModule.default || LModule;
 
-        map.current = new mapboxgl.Map({
-            container: mapContainer.current,
-            style: styleUrls[mapStyle],
-            center: [78.9629, 20.5937], // Center on India as default
-            zoom: 4,
-            pitch: 0,
-            bearing: 0,
-        });
+                if (!isMounted) return;
+                LRef.current = L;
 
-        map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
-        map.current.addControl(new mapboxgl.ScaleControl(), "bottom-right");
+                // Fix default icon issues with bundlers
+                delete (L.Icon.Default.prototype as any)._getIconUrl;
+                L.Icon.Default.mergeOptions({
+                    iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+                    iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+                    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+                });
+
+                // Re-check container in case of strict mode unmount
+                if (!mapContainer.current) {
+                    console.warn("[Map] Container ref lost before map creation.");
+                    return;
+                }
+
+                console.log("[Map] Creating Map instance...");
+                const initialMap = L.map(mapContainer.current, {
+                    zoomControl: false, // We'll add it manually to match position
+                    attributionControl: false, // Remove default, add later if needed
+                }).setView([20.5937, 78.9629], 4);
+
+                L.control.zoom({ position: "topright" }).addTo(initialMap);
+
+                tileLayerRef.current = L.tileLayer(styleUrls[mapStyle], {
+                    maxZoom: 19,
+                    attribution: attributions[mapStyle],
+                }).addTo(initialMap);
+
+                map.current = initialMap;
+
+                initialMap.whenReady(() => {
+                    console.log("[Map] Leaflet map is ready!");
+                    if (isMounted) setMapReady(true);
+                });
+            } catch (err) {
+                console.error("[Map] Failed to initialize Leaflet:", err);
+            }
+        };
+
+        initMap();
 
         return () => {
-            map.current?.remove();
-            map.current = null;
+            isMounted = false;
+            if (map.current) {
+                map.current.remove();
+                map.current = null;
+                setMapReady(false);
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [loading]);
 
     // Update map style
     useEffect(() => {
-        if (map.current) {
-            map.current.setStyle(styleUrls[mapStyle]);
-            // Re-add route source/layer after style change
-            map.current.once("style.load", () => {
-                renderRoute();
-                renderMarkers();
-            });
+        if (!map.current || !LRef.current || !mapReady) return;
+        const L = LRef.current;
+
+        if (tileLayerRef.current) {
+            map.current.removeLayer(tileLayerRef.current);
         }
+
+        tileLayerRef.current = L.tileLayer(styleUrls[mapStyle], {
+            maxZoom: 19,
+            attribution: attributions[mapStyle],
+        }).addTo(map.current);
+
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [mapStyle]);
+    }, [mapStyle, mapReady]);
 
     // Handle map click for Pin mode
     useEffect(() => {
-        if (!map.current || !trip) return;
+        if (!map.current || !trip || !mapReady) return;
 
-        const handleClick = (e: mapboxgl.MapMouseEvent) => {
+        const handleClick = (e: any) => {
             if (trip.inputMode !== "PIN_LOCATIONS") return;
-            setPendingPin({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+            setPendingPin({ lat: e.latlng.lat, lng: e.latlng.lng });
             setNewStopName("");
             setNewStopNotes("");
             setNewStopDate("");
@@ -132,54 +182,43 @@ export default function TripPlanPage() {
 
         map.current.on("click", handleClick);
         return () => {
-            map.current?.off("click", handleClick);
+            map.current.off("click", handleClick);
         };
-    }, [trip]);
+    }, [trip, mapReady]);
 
     // Render markers for stops
     const renderMarkers = useCallback(() => {
+        if (!map.current || !LRef.current) return;
+        const L = LRef.current;
+
         // Clear existing markers
-        markersRef.current.forEach((m) => m.remove());
+        markersRef.current.forEach((m) => {
+            if (map.current) map.current.removeLayer(m);
+        });
         markersRef.current = [];
 
-        if (!map.current) return;
-
         stops.forEach((stop, index) => {
-            const el = document.createElement("div");
-            el.className = "custom-marker";
-            el.innerHTML = `<div class="marker-dot">${index + 1}</div>`;
-            el.style.cssText = `
-        width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
-        cursor: pointer;
-      `;
-            const dotStyle = `
-        width: 28px; height: 28px; border-radius: 50%;
-        background: linear-gradient(135deg, #06b6d4, #8b5cf6);
-        color: white; font-weight: 700; font-size: 0.75rem;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
-        border: 2px solid rgba(255, 255, 255, 0.3);
-        transition: transform 150ms ease;
-      `;
-            el.querySelector(".marker-dot")!.setAttribute("style", dotStyle);
+            const html = `
+                <div class="custom-marker" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <div class="marker-dot" style="width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #06b6d4, #8b5cf6); color: white; font-weight: 700; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 12px rgba(6, 182, 212, 0.4); border: 2px solid rgba(255, 255, 255, 0.3); transition: transform 150ms ease;">
+                        ${index + 1}
+                    </div>
+                </div>
+            `;
 
-            el.addEventListener("mouseenter", () => {
-                const dot = el.querySelector(".marker-dot") as HTMLElement;
-                if (dot) dot.style.transform = "scale(1.2)";
-            });
-            el.addEventListener("mouseleave", () => {
-                const dot = el.querySelector(".marker-dot") as HTMLElement;
-                if (dot) dot.style.transform = "scale(1)";
+            const icon = L.divIcon({
+                html,
+                className: "",
+                iconSize: [32, 32],
+                iconAnchor: [16, 16],
             });
 
-            const marker = new mapboxgl.Marker({ element: el, draggable: true })
-                .setLngLat([stop.lng, stop.lat])
-                .addTo(map.current!);
+            const marker = L.marker([stop.lat, stop.lng], { icon, draggable: true }).addTo(map.current);
 
-            marker.on("dragend", async () => {
-                const lngLat = marker.getLngLat();
+            marker.on("dragend", async (e: any) => {
+                const position = e.target.getLatLng();
                 const updatedStops = stops.map((s) =>
-                    s.id === stop.id ? { ...s, lat: lngLat.lat, lng: lngLat.lng } : s
+                    s.id === stop.id ? { ...s, lat: position.lat, lng: position.lng } : s
                 );
                 setStops(updatedStops);
                 // Save position
@@ -187,7 +226,7 @@ export default function TripPlanPage() {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        stops: [{ id: stop.id, lat: lngLat.lat, lng: lngLat.lng }],
+                        stops: [{ id: stop.id, lat: position.lat, lng: position.lng }],
                     }),
                 });
             });
@@ -197,59 +236,39 @@ export default function TripPlanPage() {
 
         // Render route line between stops
         renderRoute();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stops, tripId]);
 
     // Render route line
     const renderRoute = useCallback(() => {
-        if (!map.current || stops.length < 2) return;
+        if (!map.current || !LRef.current) return;
+        const L = LRef.current;
 
-        // Remove existing route layer/source
-        if (map.current.getLayer("route-line")) {
-            map.current.removeLayer("route-line");
+        // Remove existing route layer
+        if (routeLayerRef.current) {
+            map.current.removeLayer(routeLayerRef.current);
+            routeLayerRef.current = null;
         }
-        if (map.current.getSource("route")) {
-            map.current.removeSource("route");
-        }
 
-        const coordinates = stops.map((s) => [s.lng, s.lat]);
+        if (stops.length < 2) return;
 
-        map.current.addSource("route", {
-            type: "geojson",
-            data: {
-                type: "Feature",
-                properties: {},
-                geometry: {
-                    type: "LineString",
-                    coordinates,
-                },
-            },
-        });
+        const coordinates = stops.map((s) => [s.lat, s.lng] as [number, number]);
 
-        map.current.addLayer({
-            id: "route-line",
-            type: "line",
-            source: "route",
-            layout: {
-                "line-join": "round",
-                "line-cap": "round",
-            },
-            paint: {
-                "line-color": "#06b6d4",
-                "line-width": 3,
-                "line-opacity": 0.7,
-                "line-dasharray": [2, 2],
-            },
-        });
+        routeLayerRef.current = L.polyline(coordinates, {
+            color: "#06b6d4",
+            weight: 3,
+            opacity: 0.7,
+            dashArray: "10, 10",
+        }).addTo(map.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [stops]);
 
     // Update markers when stops change
     useEffect(() => {
-        if (map.current && map.current.isStyleLoaded()) {
+        if (mapReady) {
             renderMarkers();
-        } else if (map.current) {
-            map.current.once("style.load", renderMarkers);
         }
-    }, [stops, renderMarkers]);
+    }, [stops, renderMarkers, mapReady]);
 
     // Add a new stop
     const handleAddStop = async () => {
@@ -311,20 +330,20 @@ export default function TripPlanPage() {
 
     // Fit map to stops
     const fitToStops = () => {
-        if (!map.current || stops.length === 0) return;
+        if (!map.current || !LRef.current || stops.length === 0) return;
+        const L = LRef.current;
 
         if (stops.length === 1) {
-            map.current.flyTo({
-                center: [stops[0].lng, stops[0].lat],
-                zoom: 12,
-                duration: 1000,
-            });
+            map.current.flyTo(
+                [stops[0].lat, stops[0].lng],
+                12,
+                { duration: 1 }
+            );
             return;
         }
 
-        const bounds = new mapboxgl.LngLatBounds();
-        stops.forEach((s) => bounds.extend([s.lng, s.lat]));
-        map.current.fitBounds(bounds, { padding: 80, duration: 1000 });
+        const bounds = L.latLngBounds(stops.map((s) => [s.lat, s.lng]));
+        map.current.fitBounds(bounds, { padding: [80, 80], duration: 1 });
     };
 
     // Save route GeoJSON
@@ -510,11 +529,11 @@ export default function TripPlanPage() {
                                         className={`stop-item ${editingStop === stop.id ? "editing" : ""}`}
                                         onClick={() => {
                                             if (map.current) {
-                                                map.current.flyTo({
-                                                    center: [stop.lng, stop.lat],
-                                                    zoom: 14,
-                                                    duration: 800,
-                                                });
+                                                map.current.flyTo(
+                                                    [stop.lat, stop.lng],
+                                                    14,
+                                                    { duration: 0.8 }
+                                                );
                                             }
                                         }}
                                     >
